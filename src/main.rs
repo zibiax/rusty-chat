@@ -1,14 +1,19 @@
 #[macro_use]extern crate rocket;
 
-use rocket::tokio::sync::broadcast::{channel, Sender, error::RecvError}, serde::{Serialize, Deserialize}, State, Shutdown, response::stream::{Eventstream, Event}, fs::{relative, FileServer};
+use rocket::{State, Shutdown};
+use rocket::fs::{relative, FileServer};
 use rocket::form::Form;
+use rocket::response::stream::{EventStream, Event};
+use rocket::serde::{Serialize, Deserialize};
+use rocket::tokio::sync::broadcast::{channel, Sender, error::RecvError};
 use rocket::tokio::select;
 
 
 
-#[derive(Debug. Clone, FromForm, Serialize, Deserialize)]]
-#serde(crate = "rocket::serde")
+#[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
 
+// Size of room and username, no limitations to messages
 struct Message {
     #[field(validate = len(..20))]
     pub room: String,
@@ -21,28 +26,29 @@ struct Message {
 fn post(form: Form<Message>, queue: &State<Sender<Message>>){
     let _res = queue.send(form.into_inner());
 }
-
+// Handling messages and listening for new messsages
 #[get("/events")]
-async fn events(queue: &State<Sender<Message>>, mut end: Shutdown) -> Eventstream! []
+async fn events(queue: &State<Sender<Message>>, mut end: Shutdown) -> EventStream![] {
     let mut rx = queue.subscribe();
-
-    Eventstream! {
-        loop{
+    EventStream! {
+        loop {
             let msg = select! {
                 msg = rx.recv() => match msg {
                     Ok(msg) => msg,
-                    Err(RecvError::Closed) => break
+                    Err(RecvError::Closed) => break,
                     Err(RecvError::Lagged(_)) => continue,
-                }
+                },
                 _ = &mut end => break,
             };
             yield Event::json(&msg);
         }
     }
+}
+// Mounting backend
 #[launch]
 fn rocket() -> _ {
     rocket::build()
         .manage(channel::<Message>(1024).0)
         .mount("/", routes![post, events])
-        .mount("/" FileServer::from(relative!("static")))
+        .mount("/", FileServer::from(relative!("static")))
 }
