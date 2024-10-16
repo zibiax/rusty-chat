@@ -10,4 +10,4 @@ rocket = { version = "0.5.1", features = ["json"] }
 
 [dev-dependencies]
 rand = "0.8.5"
-mio = "1"
+mio = "1.0.2"
